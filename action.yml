@@ -1,0 +1,26 @@
+name: 'RedPennon Code References'
+description: 'Scan the repository for feature-flag variable references and push them to RedPennon.'
+author: 'RedPennon'
+branding:
+  icon: 'flag'
+  color: 'red'
+inputs:
+  api-token:
+    description: 'Organisation API token (rpa_...). Store it as a repository secret.'
+    required: true
+  project:
+    description: 'Project key the references belong to.'
+    required: true
+  api-url:
+    description: 'API base URL override (self-hosted / development).'
+    required: false
+outputs:
+  accepted:
+    description: 'Number of references accepted.'
+  matched:
+    description: 'Number of references matched to a project variable.'
+  unknown-keys:
+    description: 'Comma-separated keys that did not match any project variable.'
+runs:
+  using: 'node20'
+  main: 'action/index.cjs'

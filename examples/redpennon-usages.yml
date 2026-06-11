@@ -1,0 +1,21 @@
+# Copy this into your repository as .github/workflows/redpennon-usages.yml.
+# It scans your code on every push to the default branch and reports where
+# each feature-flag variable key is referenced to RedPennon.
+#
+# Store an organisation API token (Settings -> API tokens in the RedPennon app)
+# as a repository secret named REDPENNON_API_TOKEN.
+name: RedPennon code references
+on:
+  push:
+    branches: [main]
+jobs:
+  usages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: redpennon/cli@v1
+        with:
+          api-token: ${{ secrets.REDPENNON_API_TOKEN }}
+          project: your-project-key

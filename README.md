@@ -1,4 +1,4 @@
-# cli
+# RedPennon CLI
 
 RedPennon command-line tool, published as `@redpennon/cli` with the binaries
 `redpennon` and `rp`. It scans a checked-out repository for feature-flag
@@ -11,15 +11,17 @@ no GitHub API rate limit and no server-side code pull. See
 
 ## What it does
 
-- **`rp usages`** — walk the working tree (default SDK call patterns plus any
-  `.redpennon/config.yml` `codeInsights` match patterns) and list every
-  variable usage. `--post` sends the full snapshot to `POST /v1/code-references`;
-  `--show-regex` prints the patterns used; `--output json` emits machine output.
-- **`rp keys`** — fetch the project's variable keys from
-  `GET /v1/code-references/keys` (used as the search terms for scanning).
-- **`rp repo init`** — scaffold a `.redpennon/config.yml` for the repo.
-- **`rp status`**, **`rp autocomplete`**, **`rp help`** — diagnostics and shell
-  completion.
+- `**rp usages*`* — walk the working tree (default SDK call patterns plus any
+`.redpennon/config.yml` `codeInsights` match patterns) and list every
+variable usage. **Side-effect-free — it never posts** (the GitHub Action does the
+upload). `--format json` emits machine output, `-o/--output` writes to a file,
+`--show-regex` prints the effective patterns, and `--only-unused` lists keys
+absent from the project.
+- `**rp keys**` — fetch the project's variable keys from
+`GET /v1/code-references/keys` (used as the search terms for scanning).
+- `**rp repo init**` — scaffold a `.redpennon/config.yml` for the repo.
+- `**rp status**`, `**rp autocomplete**`, `**rp help**` — diagnostics and shell
+completion.
 
 Roadmap (blocked on a future management API): `rp diff`, `rp cleanup`,
 `rp generate`, and management topics (`features`, `variables`, `targeting`, …).
@@ -28,7 +30,7 @@ Roadmap (blocked on a future management API): `rp diff`, `rp cleanup`,
 
 - Node 20+ and TypeScript
 - [oclif](https://oclif.io) for the topic/command structure, config directory,
-  and autocomplete
+and autocomplete
 - Published to npm as `@redpennon/cli`; optional Homebrew tap
 
 ## Authentication
@@ -70,8 +72,8 @@ Each pattern must contain exactly one capture group for the variable key.
 
 ## GitHub Action
 
-A composite action (`action.yml`) wraps `rp usages --post`. Run it on push to
-`main` with a full checkout:
+A bundled Node action (`action.yml` + `action/index.cjs`) scans the checkout and
+posts the snapshot itself. Run it on push to `main` with a full checkout:
 
 ```yaml
 on:
@@ -86,18 +88,23 @@ jobs:
           fetch-depth: 0
       - uses: redpennon/cli@v1
         with:
-          api-token: ${{ secrets.RP_API_TOKEN }}
+          api-token: ${{ secrets.REDPENNON_API_TOKEN }}
           project: my-project
 ```
+
+A ready-to-copy workflow lives in [`examples/redpennon-usages.yml`](examples/redpennon-usages.yml).
 
 ## Local development
 
 ```bash
-npm install        # install dependencies
-npm run build      # compile TypeScript
-npm test           # run the test suite
-./bin/run usages --show-regex   # try the CLI against the current repo
+npm install            # install dependencies
+npm test               # run the vitest suite
+npm run build          # compile TypeScript to dist/
+npm run action:build   # bundle the GitHub Action to action/index.cjs
+node ./bin/run.js usages --show-regex   # try the CLI against the current repo
 ```
 
-This repo is not wired into the root `./dev.sh` setup/test yet (it runs no
-service); develop it directly with the npm scripts above.
+From the monorepo root, `./dev.sh cli build` runs the TypeScript + action
+build, and `./dev.sh cli publish [--dry-run]` publishes `@redpennon/cli` to npm
+(NPM_TOKEN-gated). The bundled `action/index.cjs` is committed and consumed via
+the moving `redpennon/cli@v1` tag.

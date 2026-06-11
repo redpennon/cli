@@ -1,0 +1,67 @@
+{
+  "name": "@redpennon/cli",
+  "version": "1.0.0",
+  "description": "RedPennon command-line tool: scan a repository for feature-flag variable usages and push code references to the RedPennon API.",
+  "type": "module",
+  "bin": {
+    "redpennon": "./bin/run.js",
+    "rp": "./bin/run.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "bin",
+    "oclif.manifest.json",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/redpennon/cli.git"
+  },
+  "homepage": "https://docs.redpennon.dev/cli/installation",
+  "bugs": "https://github.com/redpennon/cli/issues",
+  "keywords": ["feature-flags", "code-references", "redpennon", "cli", "oclif"],
+  "engines": {
+    "node": ">=20"
+  },
+  "oclif": {
+    "bin": "rp",
+    "dirname": "redpennon",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "plugins": [
+      "@oclif/plugin-help",
+      "@oclif/plugin-autocomplete"
+    ],
+    "topics": {
+      "repo": {
+        "description": "Manage the repository's .redpennon/config.yml"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "action:build": "node scripts/build-action.mjs",
+    "manifest": "oclif manifest",
+    "prepublishOnly": "npm test && npm run build"
+  },
+  "dependencies": {
+    "@oclif/core": "^4.0.0",
+    "@oclif/plugin-autocomplete": "^3.2.0",
+    "@oclif/plugin-help": "^6.2.0",
+    "fast-glob": "^3.3.2",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@actions/core": "^1.11.1",
+    "@types/node": "^22.14.1",
+    "esbuild": "^0.24.0",
+    "oclif": "^4.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  },
+  "license": "MIT"
+}
