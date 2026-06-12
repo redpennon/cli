@@ -6,17 +6,23 @@ variable usages and pushes the references to the RedPennon API.
 
 This is the *push* half of the code references + staleness feature: scanning
 runs where the full source already lives (your CI or your machine), so there is
-no GitHub API rate limit and no server-side code pull. See
+no API rate limit and no server-side code pull. It works with **GitHub, GitLab,
+and Bitbucket** — the scan reads the working tree, so it is host-agnostic. See
 [AGENTS.md](../../AGENTS.md) for the full repository guide.
 
 ## What it does
 
-- `**rp usages*`* — walk the working tree (default SDK call patterns plus any
+- `**rp usages**` — walk the working tree (default SDK call patterns plus any
 `.redpennon/config.yml` `codeInsights` match patterns) and list every
-variable usage. **Side-effect-free — it never posts** (the GitHub Action does the
-upload). `--format json` emits machine output, `-o/--output` writes to a file,
-`--show-regex` prints the effective patterns, and `--only-unused` lists keys
-absent from the project.
+variable usage. **Side-effect-free — it never posts.** `--format json` emits
+machine output, `-o/--output` writes to a file, `--show-regex` prints the
+effective patterns, and `--only-unused` lists keys absent from the project.
+- `**rp publish**` — scan, resolve the git context, and POST the full snapshot to
+`POST /v1/code-references`. Auto-detects the provider from CI env vars
+(`GITLAB_CI` → gitlab; `BITBUCKET_WORKSPACE` → bitbucket; else github), so
+GitLab/Bitbucket pipelines call it with no extra flags. Override with
+`--provider`, `--repository`, `--branch`, `--commit-sha`. This is the uploader
+for non-GitHub CI (the GitHub Action does the equivalent for GitHub).
 - `**rp keys**` — fetch the project's variable keys from
 `GET /v1/code-references/keys` (used as the search terms for scanning).
 - `**rp repo init**` — scaffold a `.redpennon/config.yml` for the repo.
@@ -28,7 +34,7 @@ Roadmap (blocked on a future management API): `rp diff`, `rp cleanup`,
 
 ## Stack
 
-- Node 20+ and TypeScript
+- Node 24+ and TypeScript
 - [oclif](https://oclif.io) for the topic/command structure, config directory,
 and autocomplete
 - Published to npm as `@redpennon/cli`; optional Homebrew tap
@@ -93,6 +99,42 @@ jobs:
 ```
 
 A ready-to-copy workflow lives in [`examples/redpennon-usages.yml`](examples/redpennon-usages.yml).
+
+## GitLab / Bitbucket
+
+Install the CLI and call `rp publish`; the provider is detected from the built-in
+CI env vars (no extra flags).
+
+```yaml
+# .gitlab-ci.yml
+redpennon-usages:
+  stage: .post
+  image: node:24-alpine
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - npm install -g @redpennon/cli
+    - rp publish --project $REDPENNON_PROJECT_KEY --api-token $REDPENNON_API_TOKEN
+```
+
+```yaml
+# bitbucket-pipelines.yml
+pipelines:
+  branches:
+    main:
+      - step:
+          image: node:24-alpine
+          script:
+            - npm install -g @redpennon/cli
+            - rp publish --project $REDPENNON_PROJECT_KEY --api-token $REDPENNON_API_TOKEN
+```
+
+## Releasing
+
+Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml):
+it runs the suite, builds, and `npm publish`es `@redpennon/cli` (gated by the
+`NPM_TOKEN` repository secret), then cuts a GitHub Release. Bump `version` in
+`package.json` before tagging.
 
 ## Local development
 
