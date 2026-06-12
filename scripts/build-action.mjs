@@ -25,7 +25,7 @@ await build({
   entryPoints: [resolve(root, 'action/main.ts')],
   bundle: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node24',
   format: 'cjs',
   outfile: resolve(root, 'action/index.cjs'),
   plugins: [tsResolvePlugin],

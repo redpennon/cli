@@ -22,5 +22,5 @@ outputs:
   unknown-keys:
     description: 'Comma-separated keys that did not match any project variable.'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'action/index.cjs'
