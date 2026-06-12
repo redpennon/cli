@@ -4,8 +4,8 @@
   "description": "RedPennon command-line tool: scan a repository for feature-flag variable usages and push code references to the RedPennon API.",
   "type": "module",
   "bin": {
-    "redpennon": "./bin/run.js",
-    "rp": "./bin/run.js"
+    "redpennon": "bin/run.js",
+    "rp": "bin/run.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +17,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/redpennon/cli.git"
+    "url": "git+https://github.com/redpennon/cli.git"
   },
   "homepage": "https://docs.redpennon.dev/cli/installation",
   "bugs": "https://github.com/redpennon/cli/issues",
