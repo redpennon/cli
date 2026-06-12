@@ -38,14 +38,12 @@ jobs:
 
       - name: Publish to npm
         run: |
-          # If a higher version is already published, npm blocks implicit "latest"
-          # tagging. Pass --tag next so the publish always succeeds; the release
-          # workflow caller is responsible for moving "latest" after the fact when
-          # publishing a lower version (e.g. npm dist-tag add @redpennon/cli@x.y.z latest).
           PUBLISHED=$(npm view @redpennon/cli@latest version 2>/dev/null || echo "0.0.0")
           CURRENT=$(node -p "require('./package.json').version")
-          if [ "$(printf '%s\n' "$PUBLISHED" "$CURRENT" | sort -V | tail -1)" = "$PUBLISHED" ] && [ "$PUBLISHED" != "$CURRENT" ]; then
+          HIGHER=$(printf '%s\n' "$PUBLISHED" "$CURRENT" | sort -V | tail -1)
+          if [ "$HIGHER" = "$PUBLISHED" ] && [ "$PUBLISHED" != "$CURRENT" ]; then
             npm publish --access public --tag next
+            npm dist-tag add @redpennon/cli@${CURRENT} latest
           else
             npm publish --access public
           fi
