@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 
 export interface GitContext {
+  provider: string;
   repository: string;
   branch: string;
   commit_sha: string;
@@ -46,27 +47,70 @@ export interface GitContextInputs {
 }
 
 /**
- * Resolve the Git context, preferring explicit overrides, then CI env vars
- * (`GITHUB_REPOSITORY` / `GITHUB_REF_NAME` / `GITHUB_SHA`), then local git.
- * This provider-agnostic fallback is what lets non-GitHub CI reuse the CLI.
+ * Resolve the Git context, preferring explicit overrides, then provider-specific
+ * CI env vars (GitHub Actions, GitLab CI, Bitbucket Pipelines), then local git.
+ *
+ * Provider detection order:
+ *  1. `GITLAB_CI=true`   → gitlab  (CI_PROJECT_PATH / CI_COMMIT_REF_NAME / CI_COMMIT_SHA)
+ *  2. `BITBUCKET_WORKSPACE` present → bitbucket (BITBUCKET_REPO_FULL_NAME / BITBUCKET_BRANCH / BITBUCKET_COMMIT)
+ *  3. `GITHUB_ACTIONS=true` or GITHUB_REPOSITORY present → github
+ *  4. Local git fallback → provider defaults to "github"
  */
 export function resolveGitContext(inputs: GitContextInputs = {}): GitContext {
   const { env = process.env, runner = defaultRunner, overrides = {} } = inputs;
 
-  const repository =
-    overrides.repository?.trim() ||
-    env.GITHUB_REPOSITORY?.trim() ||
-    parseRepository(safe(runner, ['remote', 'get-url', 'origin']));
+  const isGitLab = env.GITLAB_CI === 'true';
+  const isBitbucket = Boolean(env.BITBUCKET_WORKSPACE || env.BITBUCKET_REPO_FULL_NAME);
+  const isGitHub = Boolean(env.GITHUB_ACTIONS || env.GITHUB_REPOSITORY);
 
-  const branch =
-    overrides.branch?.trim() ||
-    env.GITHUB_REF_NAME?.trim() ||
-    safe(runner, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  let provider: string;
+  let repository: string;
+  let branch: string;
+  let commit_sha: string;
 
-  const commit_sha =
-    overrides.commit_sha?.trim() ||
-    env.GITHUB_SHA?.trim() ||
-    safe(runner, ['rev-parse', 'HEAD']);
+  if (isGitLab) {
+    provider = 'gitlab';
+    repository =
+      overrides.repository?.trim() ||
+      env.CI_PROJECT_PATH?.trim() ||
+      parseRepository(safe(runner, ['remote', 'get-url', 'origin']));
+    branch =
+      overrides.branch?.trim() ||
+      env.CI_COMMIT_REF_NAME?.trim() ||
+      safe(runner, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    commit_sha =
+      overrides.commit_sha?.trim() ||
+      env.CI_COMMIT_SHA?.trim() ||
+      safe(runner, ['rev-parse', 'HEAD']);
+  } else if (isBitbucket) {
+    provider = 'bitbucket';
+    repository =
+      overrides.repository?.trim() ||
+      env.BITBUCKET_REPO_FULL_NAME?.trim() ||
+      parseRepository(safe(runner, ['remote', 'get-url', 'origin']));
+    branch =
+      overrides.branch?.trim() ||
+      env.BITBUCKET_BRANCH?.trim() ||
+      safe(runner, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    commit_sha =
+      overrides.commit_sha?.trim() ||
+      env.BITBUCKET_COMMIT?.trim() ||
+      safe(runner, ['rev-parse', 'HEAD']);
+  } else {
+    provider = isGitHub ? 'github' : 'github';
+    repository =
+      overrides.repository?.trim() ||
+      env.GITHUB_REPOSITORY?.trim() ||
+      parseRepository(safe(runner, ['remote', 'get-url', 'origin']));
+    branch =
+      overrides.branch?.trim() ||
+      env.GITHUB_REF_NAME?.trim() ||
+      safe(runner, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    commit_sha =
+      overrides.commit_sha?.trim() ||
+      env.GITHUB_SHA?.trim() ||
+      safe(runner, ['rev-parse', 'HEAD']);
+  }
 
-  return { repository, branch, commit_sha };
+  return { provider, repository, branch, commit_sha };
 }

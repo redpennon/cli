@@ -12,7 +12,7 @@ export interface BuildSnapshotInputs {
 export function buildSnapshot(inputs: BuildSnapshotInputs): IngestSnapshot {
   return {
     project: inputs.project,
-    provider: inputs.provider ?? 'github',
+    provider: inputs.provider ?? inputs.git.provider ?? 'github',
     repository: inputs.git.repository,
     branch: inputs.git.branch,
     commit_sha: inputs.git.commit_sha,
@@ -29,6 +29,7 @@ export interface PublishInputs {
   env?: NodeJS.ProcessEnv;
   cwd?: string;
   fetchImpl?: typeof fetch;
+  overrides?: Partial<GitContext>;
 }
 
 /**
@@ -38,7 +39,7 @@ export interface PublishInputs {
 export async function publishReferences(
   inputs: PublishInputs,
 ): Promise<{ snapshot: IngestSnapshot; result: IngestResult }> {
-  const git = resolveGitContext({ env: inputs.env, cwd: inputs.cwd });
+  const git = resolveGitContext({ env: inputs.env, cwd: inputs.cwd, overrides: inputs.overrides });
   const snapshot = buildSnapshot({
     project: inputs.project,
     provider: inputs.provider,
