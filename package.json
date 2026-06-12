@@ -1,6 +1,6 @@
 {
   "name": "@redpennon/cli",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "RedPennon command-line tool: scan a repository for feature-flag variable usages and push code references to the RedPennon API.",
   "type": "module",
   "bin": {
