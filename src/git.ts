@@ -61,7 +61,6 @@ export function resolveGitContext(inputs: GitContextInputs = {}): GitContext {
 
   const isGitLab = env.GITLAB_CI === 'true';
   const isBitbucket = Boolean(env.BITBUCKET_WORKSPACE || env.BITBUCKET_REPO_FULL_NAME);
-  const isGitHub = Boolean(env.GITHUB_ACTIONS || env.GITHUB_REPOSITORY);
 
   let provider: string;
   let repository: string;
@@ -97,7 +96,7 @@ export function resolveGitContext(inputs: GitContextInputs = {}): GitContext {
       env.BITBUCKET_COMMIT?.trim() ||
       safe(runner, ['rev-parse', 'HEAD']);
   } else {
-    provider = isGitHub ? 'github' : 'github';
+    provider = 'github';
     repository =
       overrides.repository?.trim() ||
       env.GITHUB_REPOSITORY?.trim() ||
