@@ -38,15 +38,23 @@ jobs:
 
       - name: Publish to npm
         run: |
-          PUBLISHED=$(npm view @redpennon/cli@latest version 2>/dev/null || echo "0.0.0")
+          chmod +x bin/run.js
           CURRENT=$(node -p "require('./package.json').version")
-          HIGHER=$(printf '%s\n' "$PUBLISHED" "$CURRENT" | sort -V | tail -1)
-          if [ "$HIGHER" = "$PUBLISHED" ] && [ "$PUBLISHED" != "$CURRENT" ]; then
-            npm publish --access public --tag next
-            npm dist-tag add @redpennon/cli@${CURRENT} latest
+          # Check if this exact version is already published; if so, skip publish
+          # but still ensure the dist-tag is correct (handles re-runs on the same tag).
+          ALREADY=$(npm view @redpennon/cli@${CURRENT} version 2>/dev/null || echo "")
+          if [ "$ALREADY" = "$CURRENT" ]; then
+            echo "Version ${CURRENT} already published, skipping publish step."
           else
-            npm publish --access public
+            LATEST=$(npm view @redpennon/cli@latest version 2>/dev/null || echo "0.0.0")
+            HIGHER=$(printf '%s\n' "$LATEST" "$CURRENT" | sort -V | tail -1)
+            if [ "$HIGHER" = "$LATEST" ] && [ "$LATEST" != "$CURRENT" ]; then
+              npm publish --access public --tag next
+            else
+              npm publish --access public
+            fi
           fi
+          npm dist-tag add @redpennon/cli@${CURRENT} latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
