@@ -4,7 +4,7 @@
 #
 # Store an organisation API token (Settings -> API tokens in the RedPennon app)
 # as a repository secret named REDPENNON_API_TOKEN.
-name: RedPennon code references
+name: RedPennon Code References
 on:
   push:
     branches: [main]
