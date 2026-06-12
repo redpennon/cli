@@ -147,6 +147,7 @@ node ./bin/run.js usages --show-regex   # try the CLI against the current repo
 ```
 
 From the monorepo root, `./dev.sh cli build` runs the TypeScript + action
-build, and `./dev.sh cli publish [--dry-run]` publishes `@redpennon/cli` to npm
-(NPM_TOKEN-gated). The bundled `action/index.cjs` is committed and consumed via
-the moving `redpennon/cli@v1` tag.
+build, and `./dev.sh cli publish` **validates** the package (dry-run pack only —
+it never uploads). Real releases run in CI on a `v*` tag (see [Releasing](#releasing)).
+The bundled `action/index.cjs` is committed and consumed via the moving
+`redpennon/cli@v1` tag.
