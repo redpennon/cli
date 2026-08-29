@@ -1,0 +1,16 @@
+version: 2
+
+# Audit finding #17. Every Python dependency is wildcard-pinned with no
+# lockfile, so a minor upstream release could change production
+# behaviour with no code change and no record. Dependabot at least makes
+# the movement visible and reviewable.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
