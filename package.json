@@ -64,7 +64,7 @@
   "devDependencies": {
     "@actions/core": "^1.11.1",
     "@types/node": "^22.14.1",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.28.2",
     "oclif": "^4.15.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2"
