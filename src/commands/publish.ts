@@ -29,7 +29,7 @@ export default class Publish extends Command {
       options: ['github', 'gitlab', 'bitbucket'],
       description:
         'Source-control provider. Auto-detected from CI env vars when absent ' +
-        '(GITLAB_CI → gitlab; BITBUCKET_WORKSPACE → bitbucket; else github).',
+        '(GITLAB_CI → gitlab; BITBUCKET_WORKSPACE → bitbucket; CircleCI/Azure/Jenkins → inferred from the remote; else github).',
     }),
     branch: Flags.string({ description: 'Branch override.' }),
     'commit-sha': Flags.string({ description: 'Commit SHA override.' }),
