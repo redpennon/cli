@@ -26,7 +26,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - run: npm test
+      - name: Test with coverage (80% line threshold)
+        run: npm run test:coverage
       - name: Verify action bundle is up to date
         run: |
           npm run action:build
