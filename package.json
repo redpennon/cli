@@ -59,7 +59,7 @@
     "prepublishOnly": "npm test && npm run build"
   },
   "dependencies": {
-    "@oclif/core": "^4.0.0",
+    "@oclif/core": "^5.1.9",
     "@oclif/plugin-autocomplete": "^3.2.0",
     "@oclif/plugin-help": "^6.2.0",
     "fast-glob": "^3.3.2",
