@@ -27,7 +27,7 @@ effective patterns, and `--only-unused` lists keys absent from the project.
     key counts) without contacting the API; no token needed.
   - `--fail-on-unknown` exits non-zero if the API reports keys that are not in
     the project.
-  - `--max-references <n>` (default 10000) errors instead of sending an
+  - `--max-references <n>` (default 2000) errors instead of sending an
     oversized snapshot. This is a client-side guard; see [Limits](#limits-and-safety).
 - `**rp auth login**` / `**rp auth logout**` — store or remove the API token in
   the CLI config directory (see [Authentication](#authentication)).
@@ -115,7 +115,7 @@ following line, e.g. `client.variable(\n  'dark-mode',\n)`. Custom
   assignments) are replaced with `[REDACTED]` before anything is sent.
 - API calls time out after 30s and are retried (up to 3 attempts, exponential
   backoff) on network errors and 5xx responses; 4xx responses fail immediately.
-- `publish` refuses to send more than 10,000 references (`--max-references`).
+- `publish` refuses to send more than 2,000 references (the API rejects larger snapshots) (`--max-references`).
   The API contract in this repository documents no per-request limit, so this is
   only a guard against runaway scans; automatic chunking would need a server-side
   decision.
@@ -152,7 +152,7 @@ jobs:
 | `working-directory` | no | Directory to scan, relative to the workspace (default: the workspace root). Must stay inside the workspace. |
 | `config-path` | no | Config file path, relative to the working directory (default: `.redpennon/config.yml`). |
 | `fail-on-unknown` | no | `true` to fail the step if the API reports keys that are not in the project (default: `false`, which only warns). |
-| `max-references` | no | Fail instead of publishing more than this many references (default: `10000`). |
+| `max-references` | no | Fail instead of publishing more than this many references (default: `2000`). |
 
 Outputs: `accepted`, `matched`, `unknown-keys` (comma-separated).
 

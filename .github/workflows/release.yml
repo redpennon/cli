@@ -63,3 +63,12 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           generate_release_notes: true
+
+      # Consumers (including RedPennon's own app/admin dogfood workflows) pin
+      # `redpennon/cli@v1`; move that floating major tag to each stable release.
+      - name: Move floating major tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          MAJOR="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$MAJOR" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$MAJOR"

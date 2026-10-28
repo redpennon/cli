@@ -25,7 +25,7 @@ inputs:
     required: false
     default: 'false'
   max-references:
-    description: 'Fail instead of publishing more than this many references (default: 10000).'
+    description: 'Fail instead of publishing more than this many references (default: 2000).'
     required: false
 outputs:
   accepted:

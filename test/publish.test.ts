@@ -69,7 +69,8 @@ describe('publishReferences', () => {
   });
 
   it('has a sensible default maximum', () => {
-    expect(DEFAULT_MAX_REFERENCES).toBe(10_000);
+    // Mirrors repos/api MAX_CODE_REFERENCES; the API rejects larger snapshots.
+    expect(DEFAULT_MAX_REFERENCES).toBe(2_000);
   });
 });
 

@@ -7,7 +7,7 @@ import { resolveGitContext, type GitContext } from './git.js';
  * limit, so this only stops runaway scans (e.g. a minified bundle that slipped
  * past the excludes) from producing an enormous request body.
  */
-export const DEFAULT_MAX_REFERENCES = 10_000;
+export const DEFAULT_MAX_REFERENCES = 2_000;
 
 export interface BuildSnapshotInputs {
   project: string;
@@ -37,7 +37,7 @@ export interface PublishInputs {
   cwd?: string;
   fetchImpl?: typeof fetch;
   overrides?: Partial<GitContext>;
-  /** Error instead of posting more references than this. Defaults to 10,000. */
+  /** Error instead of posting more references than this. Defaults to 2,000, the API's per-snapshot limit. */
   maxReferences?: number;
 }
 

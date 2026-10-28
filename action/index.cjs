@@ -16450,7 +16450,7 @@ function resolveGitContext(inputs = {}) {
 }
 
 // src/publish.ts
-var DEFAULT_MAX_REFERENCES = 1e4;
+var DEFAULT_MAX_REFERENCES = 2e3;
 function buildSnapshot(inputs) {
   return {
     project: inputs.project,
