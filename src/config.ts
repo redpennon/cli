@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
+import { validateMatchPatterns } from './patterns.js';
 import type { RepoConfig } from './types.js';
 
 export const CONFIG_RELATIVE_PATH = join('.redpennon', 'config.yml');
@@ -43,6 +44,7 @@ export function mergeConfig(
   override: Partial<RepoConfig> | undefined,
 ): RepoConfig {
   const o = override ?? {};
+  if (o.matchPatterns) validateMatchPatterns(o.matchPatterns);
   return {
     clientNames: unique([...base.clientNames, ...(o.clientNames ?? [])]),
     variableAliases: { ...base.variableAliases, ...(o.variableAliases ?? {}) },

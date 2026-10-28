@@ -58,3 +58,55 @@ describe('mergeConfig', () => {
     expect(merged.excludeFiles).toContain('**/node_modules/**');
   });
 });
+
+describe('matchPatterns validation', () => {
+  it('accepts a valid single-capture-group pattern', () => {
+    const merged = mergeConfig(DEFAULT_CONFIG, {
+      matchPatterns: { ts: ['getFlag\\(\\s*"([^"]*)"'] },
+    });
+    expect(merged.matchPatterns.ts).toHaveLength(1);
+  });
+
+  it('rejects a regex that does not compile', () => {
+    expect(() => mergeConfig(DEFAULT_CONFIG, { matchPatterns: { ts: ['(unclosed'] } })).toThrow(
+      /Invalid matchPattern for "ts".*does not compile/s,
+    );
+  });
+
+  it('rejects a pattern with no capture group', () => {
+    expect(() => mergeConfig(DEFAULT_CONFIG, { matchPatterns: { ts: ['getFlag'] } })).toThrow(
+      /exactly one capture group.*found 0/s,
+    );
+  });
+
+  it('rejects a pattern with more than one capture group', () => {
+    expect(() => mergeConfig(DEFAULT_CONFIG, { matchPatterns: { ts: ['(a)(b)'] } })).toThrow(
+      /exactly one capture group.*found 2/s,
+    );
+  });
+
+  it('does not count non-capturing groups or escaped parens', () => {
+    expect(() =>
+      mergeConfig(DEFAULT_CONFIG, { matchPatterns: { ts: ['get(?:Flag)\\(([a-z]+)'] } }),
+    ).not.toThrow();
+  });
+
+  it('rejects an over-long pattern', () => {
+    const long = `(${'a'.repeat(600)})`;
+    expect(() => mergeConfig(DEFAULT_CONFIG, { matchPatterns: { ts: [long] } })).toThrow(
+      /at most 500 characters/,
+    );
+  });
+
+  it('rejects too many patterns', () => {
+    const many = Array.from({ length: 51 }, (_, i) => `(k${i})`);
+    expect(() => mergeConfig(DEFAULT_CONFIG, { matchPatterns: { ts: many } })).toThrow(
+      /at most 50 match patterns/,
+    );
+  });
+
+  it('applies to file config too', () => {
+    const dir = tempRepo('matchPatterns:\n  ts:\n    - "(a)(b)"\n');
+    expect(() => loadConfig(dir)).toThrow(/exactly one capture group/);
+  });
+});
