@@ -24,6 +24,7 @@ export default class Keys extends Command {
     const apiToken = resolveApiToken({
       flag: flags['api-token'],
       configDir: this.config.configDir,
+      warn: (message) => this.warn(message),
     });
     const project = resolveProject({ flag: flags.project });
     if (!apiToken) {

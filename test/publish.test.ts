@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { publishReferences } from '../src/publish.js';
+import { DEFAULT_MAX_REFERENCES, publishReferences } from '../src/publish.js';
 import type { CodeReference } from '../src/types.js';
 
 const refs: CodeReference[] = [
@@ -45,4 +45,32 @@ describe('publishReferences', () => {
     const [, init] = fetchImpl.mock.calls[0];
     expect(JSON.parse((init as RequestInit).body as string).references).toEqual(refs);
   });
+
+  it('refuses to publish more references than the configured maximum', async () => {
+    const fetchImpl = vi.fn();
+    const many: CodeReference[] = Array.from({ length: 3 }, (_, i) => ({
+      key: `k${i}`,
+      file: 'a.ts',
+      line_number: i + 1,
+      snippet: 'x',
+    }));
+    await expect(
+      publishReferences({
+        apiUrl: 'http://api.test',
+        apiToken: 'rpa_x',
+        project: 'web',
+        references: many,
+        maxReferences: 2,
+        env: { GITHUB_REPOSITORY: 'a/b', GITHUB_REF_NAME: 'm', GITHUB_SHA: 's' },
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow(/Found 3 references.*limit is 2/s);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('has a sensible default maximum', () => {
+    // Mirrors repos/api MAX_CODE_REFERENCES; the API rejects larger snapshots.
+    expect(DEFAULT_MAX_REFERENCES).toBe(2_000);
+  });
 });
+

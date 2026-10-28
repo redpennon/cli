@@ -1,10 +1,11 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_API_URL,
+  maskToken,
   resolveApiToken,
   resolveApiUrl,
   resolveProject,
@@ -72,5 +73,74 @@ describe('resolveApiUrl', () => {
     expect(resolveApiUrl({ flag: 'http://localhost:8001/' })).toBe(
       'http://localhost:8001',
     );
+  });
+
+  it('accepts https URLs', () => {
+    expect(resolveApiUrl({ flag: 'https://api.example.com/' })).toBe(
+      'https://api.example.com',
+    );
+  });
+
+  it.each(['http://localhost:8001', 'http://127.0.0.1:8001', 'http://[::1]:8001'])(
+    'allows plain http for loopback host %s',
+    (url) => {
+      expect(resolveApiUrl({ flag: url })).toBe(url);
+    },
+  );
+
+  it('rejects plain http for non-loopback hosts', () => {
+    expect(() => resolveApiUrl({ flag: 'http://api.example.com' })).toThrow(/https/);
+    expect(() => resolveApiUrl({ env: { RP_API_URL: 'http://evil.test' } })).toThrow(
+      /https/,
+    );
+  });
+
+  it('rejects a loopback lookalike host', () => {
+    expect(() => resolveApiUrl({ flag: 'http://localhost.evil.com' })).toThrow(/https/);
+  });
+
+  it('rejects non-http schemes and invalid URLs', () => {
+    expect(() => resolveApiUrl({ flag: 'ftp://api.example.com' })).toThrow(/https/);
+    expect(() => resolveApiUrl({ flag: 'not a url' })).toThrow(/valid URL/);
+  });
+});
+
+describe('auth file permissions', () => {
+  const posix = process.platform !== 'win32';
+
+  it.skipIf(!posix)('warns when auth.json is group/world readable', () => {
+    const dir = tempDir();
+    const path = join(dir, 'auth.json');
+    writeFileSync(path, JSON.stringify({ apiToken: 'rpa_file' }));
+    chmodSync(path, 0o644);
+    const warn = vi.fn();
+    expect(resolveApiToken({ env: {}, configDir: dir, warn })).toBe('rpa_file');
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/chmod 600/));
+  });
+
+  it.skipIf(!posix)('does not warn when auth.json is 0600', () => {
+    const dir = tempDir();
+    const path = join(dir, 'auth.json');
+    writeFileSync(path, JSON.stringify({ apiToken: 'rpa_file' }));
+    chmodSync(path, 0o600);
+    const warn = vi.fn();
+    resolveApiToken({ env: {}, configDir: dir, warn });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when the token comes from the flag', () => {
+    const warn = vi.fn();
+    resolveApiToken({ flag: 'rpa_flag', env: {}, configDir: tempDir(), warn });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('maskToken', () => {
+  it('shows only the rpa_ prefix', () => {
+    expect(maskToken('rpa_abcdef123456')).toBe('rpa_…');
+  });
+
+  it('shows no characters of a token without the rpa_ prefix', () => {
+    expect(maskToken('abcdef123456')).toBe('…');
   });
 });

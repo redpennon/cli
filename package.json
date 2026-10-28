@@ -1,6 +1,6 @@
 {
   "name": "@redpennon/cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "RedPennon command-line tool: scan a repository for feature-flag variable usages and push code references to the RedPennon API.",
   "type": "module",
   "bin": {
@@ -43,12 +43,16 @@
     "topics": {
       "repo": {
         "description": "Manage the repository's .redpennon/config.yml"
+      },
+      "auth": {
+        "description": "Store or remove the API token used by the CLI"
       }
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "action:build": "node scripts/build-action.mjs",
     "manifest": "oclif manifest",
@@ -64,7 +68,8 @@
   "devDependencies": {
     "@actions/core": "^1.11.1",
     "@types/node": "^22.14.1",
-    "esbuild": "^0.24.0",
+    "@vitest/coverage-v8": "^3.2.7",
+    "esbuild": "^0.28.2",
     "oclif": "^4.15.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2"

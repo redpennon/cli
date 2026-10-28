@@ -15,11 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # needed to create a GitHub Release
+      id-token: write  # needed for npm provenance attestation
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
@@ -49,9 +50,9 @@ jobs:
             LATEST=$(npm view @redpennon/cli@latest version 2>/dev/null || echo "0.0.0")
             HIGHER=$(printf '%s\n' "$LATEST" "$CURRENT" | sort -V | tail -1)
             if [ "$HIGHER" = "$LATEST" ] && [ "$LATEST" != "$CURRENT" ]; then
-              npm publish --access public --tag next
+              npm publish --access public --provenance --tag next
             else
-              npm publish --access public
+              npm publish --access public --provenance
             fi
           fi
           npm dist-tag add @redpennon/cli@${CURRENT} latest
@@ -59,6 +60,15 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           generate_release_notes: true
+
+      # Consumers (including RedPennon's own app/admin dogfood workflows) pin
+      # `redpennon/cli@v1`; move that floating major tag to each stable release.
+      - name: Move floating major tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          MAJOR="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$MAJOR" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$MAJOR"

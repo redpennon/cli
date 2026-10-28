@@ -1,6 +1,6 @@
 import { Command } from '@oclif/core';
 
-import { resolveApiToken, resolveApiUrl, resolveProject } from '../auth.js';
+import { maskToken, resolveApiToken, resolveApiUrl, resolveProject } from '../auth.js';
 import { connectionFlags } from '../shared-flags.js';
 
 export default class Status extends Command {
@@ -14,6 +14,7 @@ export default class Status extends Command {
     const apiToken = resolveApiToken({
       flag: flags['api-token'],
       configDir: this.config.configDir,
+      warn: (message) => this.warn(message),
     });
     const project = resolveProject({ flag: flags.project });
     const apiUrl = resolveApiUrl({ flag: flags['api-url'] });
@@ -21,7 +22,7 @@ export default class Status extends Command {
     this.log(`API URL:  ${apiUrl}`);
     this.log(`Project:  ${project ?? '(not set)'}`);
     this.log(
-      `Token:    ${apiToken ? `configured (${apiToken.slice(0, 8)}…)` : '(not set)'}`,
+      `Token:    ${apiToken ? `configured (${maskToken(apiToken)})` : '(not set)'}`,
     );
     this.log(`Config:   ${this.config.configDir}`);
   }

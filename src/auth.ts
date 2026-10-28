@@ -1,4 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 export const DEFAULT_API_URL = 'https://api.redpennon.dev';
@@ -8,11 +16,33 @@ export interface ResolveInputs {
   flag?: string;
   env?: NodeJS.ProcessEnv;
   configDir?: string;
+  /** Receives non-fatal warnings (e.g. a too-permissive auth file). */
+  warn?: (message: string) => void;
 }
 
 function clean(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/** Warn (non-Windows) when the auth file is readable by group or others. */
+function warnIfInsecure(path: string, warn: ((message: string) => void) | undefined): void {
+  if (!warn || process.platform === 'win32') return;
+  try {
+    const mode = statSync(path).mode & 0o777;
+    if (mode & 0o077) {
+      warn(
+        `${path} is readable by other users (mode ${mode.toString(8)}). Run: chmod 600 "${path}"`,
+      );
+    }
+  } catch {
+    // Unreadable stat is not worth failing over.
+  }
+}
+
+/** Display form of a token that reveals only the `rpa_` prefix. */
+export function maskToken(token: string): string {
+  return token.startsWith('rpa_') ? 'rpa_…' : '…';
 }
 
 /**
@@ -22,7 +52,7 @@ function clean(value: string | undefined): string | undefined {
  * or a flat `{ "apiToken": "rpa_..." }`).
  */
 export function resolveApiToken(inputs: ResolveInputs = {}): string | undefined {
-  const { flag, env = process.env, configDir } = inputs;
+  const { flag, env = process.env, configDir, warn } = inputs;
   const fromFlag = clean(flag);
   if (fromFlag) return fromFlag;
   const fromEnv = clean(env.RP_API_TOKEN);
@@ -30,6 +60,7 @@ export function resolveApiToken(inputs: ResolveInputs = {}): string | undefined 
   if (configDir) {
     const path = join(configDir, AUTH_FILE_NAME);
     if (existsSync(path)) {
+      warnIfInsecure(path, warn);
       try {
         const data = JSON.parse(readFileSync(path, 'utf8'));
         const token = data?.clientCredentials?.apiToken ?? data?.apiToken;
@@ -49,9 +80,54 @@ export function resolveProject(inputs: ResolveInputs = {}): string | undefined {
   return clean(flag) ?? clean(env.RP_PROJECT_KEY);
 }
 
-/** API base URL from `--api-url` then `RP_API_URL`, default hosted; no trailing slash. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** Validate that the API URL is https (plain http only for loopback hosts). */
+function assertSecureApiUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid API URL "${url}": not a valid URL.`);
+  }
+  if (parsed.protocol === 'https:') return;
+  if (parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname)) return;
+  throw new Error(
+    `Insecure API URL "${url}": the API token would be sent in clear text. ` +
+      'Use an https:// URL (plain http:// is only allowed for localhost, 127.0.0.1 and [::1]).',
+  );
+}
+
+/**
+ * API base URL from `--api-url` then `RP_API_URL`, default hosted; no trailing
+ * slash. Must be https unless it targets a loopback host.
+ */
 export function resolveApiUrl(inputs: ResolveInputs = {}): string {
   const { flag, env = process.env } = inputs;
   const url = clean(flag) ?? clean(env.RP_API_URL) ?? DEFAULT_API_URL;
+  assertSecureApiUrl(url);
   return url.replace(/\/+$/, '');
+}
+
+/**
+ * Persist the token to `<configDir>/auth.json` as
+ * `{ "clientCredentials": { "apiToken": "..." } }` with mode 0600 (directory 0700).
+ * Returns the file path.
+ */
+export function writeAuthFile(configDir: string, apiToken: string): string {
+  mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  const path = join(configDir, AUTH_FILE_NAME);
+  const body = `${JSON.stringify({ clientCredentials: { apiToken } }, null, 2)}\n`;
+  writeFileSync(path, body, { mode: 0o600 });
+  // `mode` only applies when the file is created; tighten a pre-existing one too.
+  if (process.platform !== 'win32') chmodSync(path, 0o600);
+  return path;
+}
+
+/** Delete the stored credentials. Returns false when there was nothing to remove. */
+export function removeAuthFile(configDir: string): boolean {
+  const path = join(configDir, AUTH_FILE_NAME);
+  if (!existsSync(path)) return false;
+  rmSync(path);
+  return true;
 }

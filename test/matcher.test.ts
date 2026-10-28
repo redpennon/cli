@@ -135,3 +135,104 @@ describe('config-driven matching', () => {
     ]);
   });
 });
+
+describe('snippet sanitisation', () => {
+  it('truncates long snippets to 200 characters', () => {
+    const pad = 'x'.repeat(400);
+    const text = `const pad = '${pad}'; client.variable('dark-mode');`;
+    const [ref] = scanText(text, 'app.ts', patterns);
+    expect(ref.snippet.length).toBeLessThanOrEqual(200);
+  });
+
+  it('keeps the matched call visible when truncating a long line', () => {
+    const text = `${'y'.repeat(500)} client.variable('dark-mode')`;
+    const [ref] = scanText(text, 'app.ts', patterns);
+    expect(ref.snippet).toContain("client.variable('dark-mode')");
+  });
+
+  it.each([
+    ['rpa token', "client.variable('a'); const t = 'rpa_abcdef1234567890abcdef';", 'rpa_abcdef1234567890abcdef'],
+    ['aws access key', "client.variable('a'); // AKIAIOSFODNN7EXAMPLE", 'AKIAIOSFODNN7EXAMPLE'],
+    ['bearer token', "client.variable('a'); h = 'Bearer abc.def-123_xyz'", 'abc.def-123_xyz'],
+    ['password assignment', "client.variable('a'); password = 'hunter2hunter2'", 'hunter2hunter2'],
+    ['token assignment', "client.variable('a'); api_token: sup3rs3cret", 'sup3rs3cret'],
+  ])('redacts %s', (_label, line, secret) => {
+    const [ref] = scanText(line, 'app.ts', patterns);
+    expect(ref.snippet).not.toContain(secret);
+    expect(ref.snippet).toContain('[REDACTED]');
+    expect(ref.key).toBe('a');
+  });
+
+  it('leaves ordinary snippets untouched', () => {
+    const [ref] = scanText("  const a = client.variable('dark-mode');", 'app.ts', patterns);
+    expect(ref.snippet).toBe("const a = client.variable('dark-mode');");
+  });
+});
+
+describe('line numbers', () => {
+  it('reports correct lines in a large file', () => {
+    const lines = Array.from({ length: 20000 }, (_, i) => `// filler ${i}`);
+    lines[0] = "client.variable('first')";
+    lines[12344] = "client.variable('middle')";
+    lines[19999] = "client.variable('last')";
+    const refs = scanText(lines.join('\n'), 'big.ts', patterns);
+    const byKey = Object.fromEntries(refs.map((r) => [r.key, r.line_number]));
+    expect(byKey).toEqual({ first: 1, middle: 12345, last: 20000 });
+  });
+});
+
+describe('comments (built-in patterns)', () => {
+  it.each([
+    ['ts', "// client.variable('commented')"],
+    ['ts', "   // client.variable('commented')"],
+    ['ts', "/* client.variable('commented') */"],
+    ['ts', " * client.variable('commented')"],
+    ['go', '// client.Variable(ctx, "commented", false)'],
+    ['py', "# client.variable('commented')"],
+    ['py', "    # client.variable('commented')"],
+  ])('ignores a full-line comment in .%s: %s', (ext, line) => {
+    expect(scanText(line, `file.${ext}`, patterns)).toEqual([]);
+  });
+
+  it('still matches code with a trailing comment', () => {
+    const refs = scanText("const a = client.variable('live'); // note", 'a.ts', patterns);
+    expect(keys(refs)).toEqual(['live']);
+  });
+
+  it('does not treat a TypeScript #private field line as a comment', () => {
+    const refs = scanText("#flag = client.variable('private-field');", 'a.ts', patterns);
+    expect(keys(refs)).toEqual(['private-field']);
+  });
+
+  it('does not apply comment filtering to custom patterns', () => {
+    const config = mergeConfig(DEFAULT_CONFIG, {
+      matchPatterns: { ts: ['getFlag\\(\\s*"([^"]*)"'] },
+    });
+    const refs = scanTextWithConfig('// getFlag("custom-in-comment")', 'a.ts', config);
+    expect(keys(refs)).toEqual(['custom-in-comment']);
+  });
+});
+
+describe('key on the next line (built-in single-call patterns)', () => {
+  it('matches node calls split across lines', () => {
+    const text = "client.variable(\n  'split-key',\n  false,\n)";
+    const refs = scanText(text, 'a.ts', patterns);
+    expect(keys(refs)).toEqual(['split-key']);
+    expect(refs[0].line_number).toBe(1);
+  });
+
+  it('matches python calls split across lines (incl. CRLF)', () => {
+    const text = "client.variable(\r\n    'py-split'\r\n)";
+    expect(keys(scanText(text, 'a.py', patterns))).toEqual(['py-split']);
+  });
+
+  it('matches go calls split across lines', () => {
+    const text = 'client.Variable(\n\tctx,\n\t"go-split",\n\tfalse,\n)';
+    expect(keys(scanText(text, 'a.go', patterns))).toEqual(['go-split']);
+  });
+
+  it('matches template-literal-free batch arrays split across lines', () => {
+    const text = "client.variables([\n  'a-one',\n  'a-two',\n])";
+    expect(keys(scanText(text, 'a.ts', patterns))).toEqual(['a-one', 'a-two']);
+  });
+});

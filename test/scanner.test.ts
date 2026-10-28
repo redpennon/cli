@@ -53,3 +53,42 @@ describe('scanRepository', () => {
     expect(distinctKeys(refs)).toEqual(['only-src']);
   });
 });
+
+describe('scanRepository safety limits', () => {
+  it('rejects include globs with .. segments', async () => {
+    const cwd = repoWith({ 'src/a.ts': "client.variable('a')" });
+    const config = mergeConfig(DEFAULT_CONFIG, { includeFiles: ['../**/*.ts'] });
+    await expect(scanRepository({ cwd, config })).rejects.toThrow(/outside the repository/);
+  });
+
+  it('rejects .. segments nested in braces or paths', async () => {
+    const cwd = repoWith({ 'src/a.ts': "client.variable('a')" });
+    for (const glob of ['src/../../x/*.ts', '{src,../other}/*.ts']) {
+      const config = mergeConfig(DEFAULT_CONFIG, { includeFiles: [glob] });
+      await expect(scanRepository({ cwd, config })).rejects.toThrow(/outside the repository/);
+    }
+  });
+
+  it('rejects absolute include globs', async () => {
+    const cwd = repoWith({ 'src/a.ts': "client.variable('a')" });
+    const config = mergeConfig(DEFAULT_CONFIG, { includeFiles: ['/etc/**/*.ts'] });
+    await expect(scanRepository({ cwd, config })).rejects.toThrow(/outside the repository/);
+  });
+
+  it('skips files over the size limit', async () => {
+    const cwd = repoWith({
+      'small.ts': "client.variable('small')",
+      'big.ts': `client.variable('big')\n${'// pad\n'.repeat(200)}`,
+    });
+    const refs = await scanRepository({ cwd, config: DEFAULT_CONFIG, maxFileBytes: 500 });
+    expect(distinctKeys(refs)).toEqual(['small']);
+  });
+
+  it('defaults the size limit to 1 MB', async () => {
+    const big = `client.variable('huge')\n${'a'.repeat(1_100_000)}`;
+    const cwd = repoWith({ 'huge.ts': big, 'ok.ts': "client.variable('ok')" });
+    const refs = await scanRepository({ cwd, config: DEFAULT_CONFIG });
+    expect(distinctKeys(refs)).toEqual(['ok']);
+  });
+});
+

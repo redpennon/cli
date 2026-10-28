@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
 
+import { validateMatchPatterns } from './patterns.js';
 import type { RepoConfig } from './types.js';
 
 export const CONFIG_RELATIVE_PATH = join('.redpennon', 'config.yml');
@@ -43,6 +44,7 @@ export function mergeConfig(
   override: Partial<RepoConfig> | undefined,
 ): RepoConfig {
   const o = override ?? {};
+  if (o.matchPatterns) validateMatchPatterns(o.matchPatterns);
   return {
     clientNames: unique([...base.clientNames, ...(o.clientNames ?? [])]),
     variableAliases: { ...base.variableAliases, ...(o.variableAliases ?? {}) },
@@ -58,10 +60,11 @@ export function mergeConfig(
 /**
  * Load `.redpennon/config.yml` from the repo root, merged over the defaults.
  * Supports both a top-level config and a DevCycle-style `codeInsights:` block.
- * Returns the defaults unchanged when no file is present.
+ * Returns the defaults unchanged when no file is present. `configPath` (relative
+ * to `repoRoot`) replaces the default location.
  */
-export function loadConfig(repoRoot: string): RepoConfig {
-  const path = join(repoRoot, CONFIG_RELATIVE_PATH);
+export function loadConfig(repoRoot: string, configPath?: string): RepoConfig {
+  const path = configPath ? resolve(repoRoot, configPath) : join(repoRoot, CONFIG_RELATIVE_PATH);
   if (!existsSync(path)) return { ...DEFAULT_CONFIG };
   const raw = parse(readFileSync(path, 'utf8')) ?? {};
   const block = (raw.codeInsights ?? raw) as Partial<RepoConfig>;
