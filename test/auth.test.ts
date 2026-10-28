@@ -73,4 +73,33 @@ describe('resolveApiUrl', () => {
       'http://localhost:8001',
     );
   });
+
+  it('accepts https URLs', () => {
+    expect(resolveApiUrl({ flag: 'https://api.example.com/' })).toBe(
+      'https://api.example.com',
+    );
+  });
+
+  it.each(['http://localhost:8001', 'http://127.0.0.1:8001', 'http://[::1]:8001'])(
+    'allows plain http for loopback host %s',
+    (url) => {
+      expect(resolveApiUrl({ flag: url })).toBe(url);
+    },
+  );
+
+  it('rejects plain http for non-loopback hosts', () => {
+    expect(() => resolveApiUrl({ flag: 'http://api.example.com' })).toThrow(/https/);
+    expect(() => resolveApiUrl({ env: { RP_API_URL: 'http://evil.test' } })).toThrow(
+      /https/,
+    );
+  });
+
+  it('rejects a loopback lookalike host', () => {
+    expect(() => resolveApiUrl({ flag: 'http://localhost.evil.com' })).toThrow(/https/);
+  });
+
+  it('rejects non-http schemes and invalid URLs', () => {
+    expect(() => resolveApiUrl({ flag: 'ftp://api.example.com' })).toThrow(/https/);
+    expect(() => resolveApiUrl({ flag: 'not a url' })).toThrow(/valid URL/);
+  });
 });

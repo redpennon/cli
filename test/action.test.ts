@@ -38,7 +38,7 @@ describe('runAction', () => {
     const inputs: Record<string, string> = {
       'api-token': 'rpa_x',
       project: 'web',
-      'api-url': 'http://api.test',
+      'api-url': 'https://api.test',
     };
     const setOutput = vi.fn();
     const setFailed = vi.fn();
@@ -60,7 +60,7 @@ describe('runAction', () => {
 
     expect(setFailed).not.toHaveBeenCalled();
     const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe('http://api.test/v1/code-references');
+    expect(url).toBe('https://api.test/v1/code-references');
     const payload = JSON.parse((init as RequestInit).body as string);
     expect(payload).toMatchObject({
       project: 'web',

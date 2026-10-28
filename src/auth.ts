@@ -49,9 +49,31 @@ export function resolveProject(inputs: ResolveInputs = {}): string | undefined {
   return clean(flag) ?? clean(env.RP_PROJECT_KEY);
 }
 
-/** API base URL from `--api-url` then `RP_API_URL`, default hosted; no trailing slash. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** Validate that the API URL is https (plain http only for loopback hosts). */
+function assertSecureApiUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid API URL "${url}": not a valid URL.`);
+  }
+  if (parsed.protocol === 'https:') return;
+  if (parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname)) return;
+  throw new Error(
+    `Insecure API URL "${url}": the API token would be sent in clear text. ` +
+      'Use an https:// URL (plain http:// is only allowed for localhost, 127.0.0.1 and [::1]).',
+  );
+}
+
+/**
+ * API base URL from `--api-url` then `RP_API_URL`, default hosted; no trailing
+ * slash. Must be https unless it targets a loopback host.
+ */
 export function resolveApiUrl(inputs: ResolveInputs = {}): string {
   const { flag, env = process.env } = inputs;
   const url = clean(flag) ?? clean(env.RP_API_URL) ?? DEFAULT_API_URL;
+  assertSecureApiUrl(url);
   return url.replace(/\/+$/, '');
 }
