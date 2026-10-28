@@ -168,3 +168,15 @@ describe('snippet sanitisation', () => {
     expect(ref.snippet).toBe("const a = client.variable('dark-mode');");
   });
 });
+
+describe('line numbers', () => {
+  it('reports correct lines in a large file', () => {
+    const lines = Array.from({ length: 20000 }, (_, i) => `// filler ${i}`);
+    lines[0] = "client.variable('first')";
+    lines[12344] = "client.variable('middle')";
+    lines[19999] = "client.variable('last')";
+    const refs = scanText(lines.join('\n'), 'big.ts', patterns);
+    const byKey = Object.fromEntries(refs.map((r) => [r.key, r.line_number]));
+    expect(byKey).toEqual({ first: 1, middle: 12345, last: 20000 });
+  });
+});

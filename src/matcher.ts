@@ -7,12 +7,25 @@ export function extensionOf(file: string): string {
   return dot === -1 ? '' : base.slice(dot + 1).toLowerCase();
 }
 
-function lineNumberAt(text: string, index: number): number {
-  let line = 1;
-  for (let i = 0; i < index && i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) line++;
+/** Start offset of every line, so a match index maps to a line by binary search. */
+function lineStarts(text: string): number[] {
+  const starts = [0];
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
+    starts.push(i + 1);
   }
-  return line;
+  return starts;
+}
+
+/** 1-based line number containing `index`. */
+function lineNumberAt(starts: number[], index: number): number {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= index) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo + 1;
 }
 
 export const MAX_SNIPPET_LENGTH = 200;
@@ -69,12 +82,13 @@ export function scanText(
   aliases: Record<string, string> = {},
 ): CodeReference[] {
   const ext = extensionOf(file);
+  const starts = lineStarts(text);
   const seen = new Set<string>();
   const refs: CodeReference[] = [];
 
   const add = (rawKey: string, index: number, matchText: string) => {
     const key = aliases[rawKey] ?? rawKey;
-    const line = lineNumberAt(text, index);
+    const line = lineNumberAt(starts, index);
     const dedupe = `${key}\u0000${line}`;
     if (seen.has(dedupe)) return;
     seen.add(dedupe);
