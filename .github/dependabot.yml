@@ -1,9 +1,8 @@
 version: 2
 
-# Audit finding #17. Every Python dependency is wildcard-pinned with no
-# lockfile, so a minor upstream release could change production
-# behaviour with no code change and no record. Dependabot at least makes
-# the movement visible and reviewable.
+# Audit finding #17. Dependency and GitHub Action versions move silently
+# unless something proposes the bump. Dependabot makes that movement
+# visible and reviewable (npm dependencies and pinned action SHAs).
 updates:
   - package-ecosystem: npm
     directory: "/"
