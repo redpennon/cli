@@ -67,7 +67,7 @@
   },
   "devDependencies": {
     "@actions/core": "^1.11.1",
-    "@types/node": "^22.14.1",
+    "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^3.2.7",
     "esbuild": "^0.28.2",
     "oclif": "^4.15.0",
