@@ -43,6 +43,9 @@
     "topics": {
       "repo": {
         "description": "Manage the repository's .redpennon/config.yml"
+      },
+      "auth": {
+        "description": "Store or remove the API token used by the CLI"
       }
     }
   },

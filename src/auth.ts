@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 export const DEFAULT_API_URL = 'https://api.redpennon.dev';
@@ -99,4 +107,27 @@ export function resolveApiUrl(inputs: ResolveInputs = {}): string {
   const url = clean(flag) ?? clean(env.RP_API_URL) ?? DEFAULT_API_URL;
   assertSecureApiUrl(url);
   return url.replace(/\/+$/, '');
+}
+
+/**
+ * Persist the token to `<configDir>/auth.json` as
+ * `{ "clientCredentials": { "apiToken": "..." } }` with mode 0600 (directory 0700).
+ * Returns the file path.
+ */
+export function writeAuthFile(configDir: string, apiToken: string): string {
+  mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  const path = join(configDir, AUTH_FILE_NAME);
+  const body = `${JSON.stringify({ clientCredentials: { apiToken } }, null, 2)}\n`;
+  writeFileSync(path, body, { mode: 0o600 });
+  // `mode` only applies when the file is created; tighten a pre-existing one too.
+  if (process.platform !== 'win32') chmodSync(path, 0o600);
+  return path;
+}
+
+/** Delete the stored credentials. Returns false when there was nothing to remove. */
+export function removeAuthFile(configDir: string): boolean {
+  const path = join(configDir, AUTH_FILE_NAME);
+  if (!existsSync(path)) return false;
+  rmSync(path);
+  return true;
 }
