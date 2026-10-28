@@ -55,6 +55,7 @@ export default class Publish extends Command {
     const apiToken = resolveApiToken({
       flag: flags['api-token'],
       configDir: this.config.configDir,
+      warn: (message) => this.warn(message),
     });
     if (!apiToken) {
       this.error(

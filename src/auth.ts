@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const DEFAULT_API_URL = 'https://api.redpennon.dev';
@@ -8,11 +8,33 @@ export interface ResolveInputs {
   flag?: string;
   env?: NodeJS.ProcessEnv;
   configDir?: string;
+  /** Receives non-fatal warnings (e.g. a too-permissive auth file). */
+  warn?: (message: string) => void;
 }
 
 function clean(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/** Warn (non-Windows) when the auth file is readable by group or others. */
+function warnIfInsecure(path: string, warn: ((message: string) => void) | undefined): void {
+  if (!warn || process.platform === 'win32') return;
+  try {
+    const mode = statSync(path).mode & 0o777;
+    if (mode & 0o077) {
+      warn(
+        `${path} is readable by other users (mode ${mode.toString(8)}). Run: chmod 600 "${path}"`,
+      );
+    }
+  } catch {
+    // Unreadable stat is not worth failing over.
+  }
+}
+
+/** Display form of a token that reveals only the `rpa_` prefix. */
+export function maskToken(token: string): string {
+  return token.startsWith('rpa_') ? 'rpa_…' : '…';
 }
 
 /**
@@ -22,7 +44,7 @@ function clean(value: string | undefined): string | undefined {
  * or a flat `{ "apiToken": "rpa_..." }`).
  */
 export function resolveApiToken(inputs: ResolveInputs = {}): string | undefined {
-  const { flag, env = process.env, configDir } = inputs;
+  const { flag, env = process.env, configDir, warn } = inputs;
   const fromFlag = clean(flag);
   if (fromFlag) return fromFlag;
   const fromEnv = clean(env.RP_API_TOKEN);
@@ -30,6 +52,7 @@ export function resolveApiToken(inputs: ResolveInputs = {}): string | undefined 
   if (configDir) {
     const path = join(configDir, AUTH_FILE_NAME);
     if (existsSync(path)) {
+      warnIfInsecure(path, warn);
       try {
         const data = JSON.parse(readFileSync(path, 'utf8'));
         const token = data?.clientCredentials?.apiToken ?? data?.apiToken;
