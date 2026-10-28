@@ -135,3 +135,36 @@ describe('config-driven matching', () => {
     ]);
   });
 });
+
+describe('snippet sanitisation', () => {
+  it('truncates long snippets to 200 characters', () => {
+    const pad = 'x'.repeat(400);
+    const text = `const pad = '${pad}'; client.variable('dark-mode');`;
+    const [ref] = scanText(text, 'app.ts', patterns);
+    expect(ref.snippet.length).toBeLessThanOrEqual(200);
+  });
+
+  it('keeps the matched call visible when truncating a long line', () => {
+    const text = `${'y'.repeat(500)} client.variable('dark-mode')`;
+    const [ref] = scanText(text, 'app.ts', patterns);
+    expect(ref.snippet).toContain("client.variable('dark-mode')");
+  });
+
+  it.each([
+    ['rpa token', "client.variable('a'); const t = 'rpa_abcdef1234567890abcdef';", 'rpa_abcdef1234567890abcdef'],
+    ['aws access key', "client.variable('a'); // AKIAIOSFODNN7EXAMPLE", 'AKIAIOSFODNN7EXAMPLE'],
+    ['bearer token', "client.variable('a'); h = 'Bearer abc.def-123_xyz'", 'abc.def-123_xyz'],
+    ['password assignment', "client.variable('a'); password = 'hunter2hunter2'", 'hunter2hunter2'],
+    ['token assignment', "client.variable('a'); api_token: sup3rs3cret", 'sup3rs3cret'],
+  ])('redacts %s', (_label, line, secret) => {
+    const [ref] = scanText(line, 'app.ts', patterns);
+    expect(ref.snippet).not.toContain(secret);
+    expect(ref.snippet).toContain('[REDACTED]');
+    expect(ref.key).toBe('a');
+  });
+
+  it('leaves ordinary snippets untouched', () => {
+    const [ref] = scanText("  const a = client.variable('dark-mode');", 'app.ts', patterns);
+    expect(ref.snippet).toBe("const a = client.variable('dark-mode');");
+  });
+});
