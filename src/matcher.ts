@@ -86,6 +86,14 @@ export function scanText(
   const seen = new Set<string>();
   const refs: CodeReference[] = [];
 
+  const onCommentLine = (pattern: UsagePattern, index: number): boolean => {
+    if (!pattern.commentPrefixes) return false;
+    const lineStart = text.lastIndexOf('\n', index - 1) + 1;
+    const before = text.slice(lineStart, index).trimStart();
+    // Only a *leading* comment marker counts; the match must sit on that comment line.
+    return before === '' ? false : pattern.commentPrefixes.some((p) => before.startsWith(p));
+  };
+
   const add = (rawKey: string, index: number, matchText: string) => {
     const key = aliases[rawKey] ?? rawKey;
     const line = lineNumberAt(starts, index);
@@ -100,6 +108,10 @@ export function scanText(
     pattern.regex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.regex.exec(text)) !== null) {
+      if (onCommentLine(pattern, match.index)) {
+        if (match.index === pattern.regex.lastIndex) pattern.regex.lastIndex++;
+        continue;
+      }
       if (pattern.kind === 'array') {
         for (const key of extractArrayKeys(match[1] ?? '')) add(key, match.index, match[0]);
       } else if (match[1]) {

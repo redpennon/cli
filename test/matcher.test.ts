@@ -180,3 +180,59 @@ describe('line numbers', () => {
     expect(byKey).toEqual({ first: 1, middle: 12345, last: 20000 });
   });
 });
+
+describe('comments (built-in patterns)', () => {
+  it.each([
+    ['ts', "// client.variable('commented')"],
+    ['ts', "   // client.variable('commented')"],
+    ['ts', "/* client.variable('commented') */"],
+    ['ts', " * client.variable('commented')"],
+    ['go', '// client.Variable(ctx, "commented", false)'],
+    ['py', "# client.variable('commented')"],
+    ['py', "    # client.variable('commented')"],
+  ])('ignores a full-line comment in .%s: %s', (ext, line) => {
+    expect(scanText(line, `file.${ext}`, patterns)).toEqual([]);
+  });
+
+  it('still matches code with a trailing comment', () => {
+    const refs = scanText("const a = client.variable('live'); // note", 'a.ts', patterns);
+    expect(keys(refs)).toEqual(['live']);
+  });
+
+  it('does not treat a TypeScript #private field line as a comment', () => {
+    const refs = scanText("#flag = client.variable('private-field');", 'a.ts', patterns);
+    expect(keys(refs)).toEqual(['private-field']);
+  });
+
+  it('does not apply comment filtering to custom patterns', () => {
+    const config = mergeConfig(DEFAULT_CONFIG, {
+      matchPatterns: { ts: ['getFlag\\(\\s*"([^"]*)"'] },
+    });
+    const refs = scanTextWithConfig('// getFlag("custom-in-comment")', 'a.ts', config);
+    expect(keys(refs)).toEqual(['custom-in-comment']);
+  });
+});
+
+describe('key on the next line (built-in single-call patterns)', () => {
+  it('matches node calls split across lines', () => {
+    const text = "client.variable(\n  'split-key',\n  false,\n)";
+    const refs = scanText(text, 'a.ts', patterns);
+    expect(keys(refs)).toEqual(['split-key']);
+    expect(refs[0].line_number).toBe(1);
+  });
+
+  it('matches python calls split across lines (incl. CRLF)', () => {
+    const text = "client.variable(\r\n    'py-split'\r\n)";
+    expect(keys(scanText(text, 'a.py', patterns))).toEqual(['py-split']);
+  });
+
+  it('matches go calls split across lines', () => {
+    const text = 'client.Variable(\n\tctx,\n\t"go-split",\n\tfalse,\n)';
+    expect(keys(scanText(text, 'a.go', patterns))).toEqual(['go-split']);
+  });
+
+  it('matches template-literal-free batch arrays split across lines', () => {
+    const text = "client.variables([\n  'a-one',\n  'a-two',\n])";
+    expect(keys(scanText(text, 'a.ts', patterns))).toEqual(['a-one', 'a-two']);
+  });
+});

@@ -8,11 +8,16 @@ export interface UsagePattern {
   kind: 'single' | 'array';
   /** Human label, surfaced by `--show-regex`. */
   label: string;
+  /** Matches on a line starting with one of these (after indent) are ignored. Built-ins only. */
+  commentPrefixes?: string[];
 }
 
 const TS_EXTS = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs'];
 const PY_EXTS = ['py'];
 const GO_EXTS = ['go'];
+
+const C_COMMENTS = ['//', '/*', '*'];
+const PY_COMMENTS = ['#'];
 
 function escape(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -35,6 +40,7 @@ export function buildPatterns(config: RepoConfig): UsagePattern[] {
       extensions: TS_EXTS,
       kind: 'single',
       label: 'node:single',
+      commentPrefixes: C_COMMENTS,
       regex: new RegExp(
         `\\b(?:${clients})\\.(?:variable|variableValue)\\(\\s*['"]([\\w-]+)['"]`,
         'g',
@@ -44,12 +50,14 @@ export function buildPatterns(config: RepoConfig): UsagePattern[] {
       extensions: TS_EXTS,
       kind: 'array',
       label: 'node:batch',
+      commentPrefixes: C_COMMENTS,
       regex: new RegExp(`\\b(?:${clients})\\.variables\\(\\s*\\[([^\\]]*)\\]`, 'g'),
     },
     {
       extensions: PY_EXTS,
       kind: 'single',
       label: 'python:single',
+      commentPrefixes: PY_COMMENTS,
       regex: new RegExp(
         `\\b(?:${clients})\\.(?:variable|variable_value)\\(\\s*['"]([\\w-]+)['"]`,
         'g',
@@ -59,12 +67,14 @@ export function buildPatterns(config: RepoConfig): UsagePattern[] {
       extensions: PY_EXTS,
       kind: 'array',
       label: 'python:batch',
+      commentPrefixes: PY_COMMENTS,
       regex: new RegExp(`\\b(?:${clients})\\.variables\\(\\s*\\[([^\\]]*)\\]`, 'g'),
     },
     {
       extensions: GO_EXTS,
       kind: 'single',
       label: 'go:single',
+      commentPrefixes: C_COMMENTS,
       regex: new RegExp(
         `\\b(?:${clients})\\.(?:Variable|VariableValue)\\([^,]*,\\s*"([\\w-]+)"`,
         'g',
