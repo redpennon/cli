@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -135,5 +135,17 @@ describe('custom pattern backtracking safety (SAST #32)', () => {
   ])('still accepts %s', async (raw) => {
     const { validateMatchPatterns } = await import('../src/patterns.js');
     expect(() => validateMatchPatterns({ txt: [raw] })).not.toThrow();
+  });
+});
+
+
+describe('loadConfig symlinks (SAST #29)', () => {
+  it('refuses a config file that is a symlink', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rp-config-'));
+    mkdirSync(join(dir, '.redpennon'), { recursive: true });
+    const elsewhere = join(dir, 'elsewhere.yml');
+    writeFileSync(elsewhere, 'includeFiles: ["**/*.ts"]\n');
+    symlinkSync(elsewhere, join(dir, '.redpennon', 'config.yml'));
+    expect(() => loadConfig(dir)).toThrow(/symlink/i);
   });
 });

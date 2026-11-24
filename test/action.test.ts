@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -229,6 +229,24 @@ describe('runAction', () => {
       );
       const payload = JSON.parse((fetchImpl.mock.calls[0][1] as RequestInit).body as string);
       expect(payload.references.map((r: { key: string }) => r.key)).toEqual(['in-package']);
+    });
+
+    it('rejects a working-directory that is a symlink out of the workspace', async () => {
+      const root = repoWith('a.ts', "client.variable('a')");
+      const outside = mkdtempSync(join(tmpdir(), 'rp-outside-'));
+      symlinkSync(outside, join(root, 'link'));
+      const setFailed = vi.fn();
+      await runAction(
+        deps({
+          getInput: (name) =>
+            ({ 'api-token': 'rpa_x', project: 'web', 'working-directory': 'link' })[name] ?? '',
+          setFailed,
+          cwd: root,
+          env: baseEnv,
+          fetchImpl: okFetch() as unknown as typeof fetch,
+        }),
+      );
+      expect(setFailed).toHaveBeenCalledWith(expect.stringMatching(/outside the workspace/));
     });
 
     it('rejects a directory outside the workspace', async () => {

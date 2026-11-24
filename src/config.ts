@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { parse } from 'yaml';
 
 import { validateMatchPatterns } from './patterns.js';
@@ -66,6 +66,11 @@ export function mergeConfig(
 export function loadConfig(repoRoot: string, configPath?: string): RepoConfig {
   const path = configPath ? resolve(repoRoot, configPath) : join(repoRoot, CONFIG_RELATIVE_PATH);
   if (!existsSync(path)) return { ...DEFAULT_CONFIG };
+  // The config is repository content: a symlink here would read an
+  // arbitrary file as YAML (SAST #29).
+  if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== join(realpathSync(repoRoot), relative(repoRoot, path))) {
+    throw new Error(`Config file "${path}" is, or sits behind, a symlink; refusing to read it.`);
+  }
   const raw = parse(readFileSync(path, 'utf8')) ?? {};
   const block = (raw.codeInsights ?? raw) as Partial<RepoConfig>;
   return mergeConfig(DEFAULT_CONFIG, block);
