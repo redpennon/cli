@@ -96,6 +96,71 @@ export function buildPatterns(config: RepoConfig): UsagePattern[] {
   return patterns;
 }
 
+/**
+ * True when `raw` repeats a group that itself repeats or branches, e.g.
+ * `(a+)+`, `(a*)*`, `(a|aa)+`, `(.*a){12}`. These are the shapes whose
+ * backtracking is exponential: a hostile `.redpennon/config.yml` could hang
+ * every scan with one (SAST #32). Conservative by design — a few exotic
+ * but safe patterns are refused, and the error says how to rewrite them.
+ */
+export function hasNestedQuantifier(raw: string): boolean {
+  interface Frame { repeats: boolean }
+  const stack: Frame[] = [];
+  let i = 0;
+
+  /** Does the quantifier starting at `at` allow more than one repetition? Returns [multi, length]. */
+  const quantifierAt = (at: number): [boolean, number] => {
+    const ch = raw[at];
+    if (ch === '*' || ch === '+') return [true, 1 + (raw[at + 1] === '?' ? 1 : 0)];
+    if (ch === '?') return [false, 1 + (raw[at + 1] === '?' ? 1 : 0)];
+    if (ch === '{') {
+      const m = /^\{(\d+)(?:(,)(\d*))?\}/.exec(raw.slice(at));
+      if (m) {
+        const max = m[2] ? (m[3] === '' ? Infinity : Number(m[3])) : Number(m[1]);
+        return [max > 1, m[0].length + (raw[at + m[0].length] === '?' ? 1 : 0)];
+      }
+    }
+    return [false, 0];
+  };
+
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === '[') {
+      i++;
+      while (i < raw.length && raw[i] !== ']') i += raw[i] === '\\' ? 2 : 1;
+      i++;
+      const [multi, len] = quantifierAt(i);
+      if (multi && stack.length) stack[stack.length - 1].repeats = true;
+      i += len;
+      continue;
+    }
+    if (ch === '(') { stack.push({ repeats: false }); i++; continue; }
+    if (ch === '|') { if (stack.length) stack[stack.length - 1].repeats = true; i++; continue; }
+    if (ch === ')') {
+      const frame = stack.pop();
+      i++;
+      const [multi, len] = quantifierAt(i);
+      if (multi && frame?.repeats) return true;
+      if (stack.length && (multi || frame?.repeats)) stack[stack.length - 1].repeats = true;
+      i += len;
+      continue;
+    }
+    const [multi, len] = quantifierAt(i);
+    if (len > 0) {
+      if (multi && stack.length) stack[stack.length - 1].repeats = true;
+      i += len;
+      continue;
+    }
+    // A plain atom (literal, `.`, class escape) followed by a quantifier is handled above
+    // on the next iteration; here just advance, noting a quantified atom.
+    const [atomMulti, atomLen] = quantifierAt(i + 1);
+    if (atomMulti && stack.length) stack[stack.length - 1].repeats = true;
+    i += 1 + atomLen;
+  }
+  return false;
+}
+
 export const MAX_PATTERN_LENGTH = 500;
 export const MAX_MATCH_PATTERNS = 50;
 
@@ -132,6 +197,12 @@ export function validateMatchPatterns(patterns: Record<string, string[]>): void 
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         throw new Error(`Invalid matchPattern for "${ext}": "${raw}" does not compile (${reason}).`);
+      }
+      if (hasNestedQuantifier(raw)) {
+        throw new Error(
+          `Invalid matchPattern for "${ext}": "${raw}" repeats a group that already repeats or branches (for example "(a+)+"), ` +
+            'which can backtrack catastrophically. Rewrite it without nested quantifiers.',
+        );
       }
       if (groups !== 1) {
         throw new Error(

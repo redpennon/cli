@@ -110,3 +110,30 @@ describe('matchPatterns validation', () => {
     expect(() => loadConfig(dir)).toThrow(/exactly one capture group/);
   });
 });
+
+describe('custom pattern backtracking safety (SAST #32)', () => {
+  it.each([
+    '(a+)+$',
+    '(a*)*b',
+    '(a|aa)+$',
+    '((a+))+x',
+    '(.*a){12}x(k)',
+    '(\\w+\\s?)*(k)',
+    '(x+x+)+(y)',
+  ])('rejects %s', async (raw) => {
+    const { validateMatchPatterns } = await import('../src/patterns.js');
+    const withGroup = raw.includes('(k)') || raw.includes('(y)') ? raw : `${raw}(k)`;
+    expect(() => validateMatchPatterns({ txt: [withGroup] })).toThrow(/backtrack|nested|unsafe/i);
+  });
+
+  it.each([
+    'variable\\("([^"]+)"\\)',
+    'getFlag\\([\'"]([\\w-]+)[\'"]',
+    '(?:flags|toggles)\\.([a-z_]+)',
+    '@flag\\(([A-Za-z0-9_-]+)\\)',
+    'feature\\s*=\\s*"([^"]*)"',
+  ])('still accepts %s', async (raw) => {
+    const { validateMatchPatterns } = await import('../src/patterns.js');
+    expect(() => validateMatchPatterns({ txt: [raw] })).not.toThrow();
+  });
+});
