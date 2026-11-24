@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { CONFIG_RELATIVE_PATH } from './config.js';
+import { writeFileNoFollow } from './safe-write.js';
 
 export const CONFIG_SCAFFOLD = `# RedPennon code references configuration.
 # Docs: https://docs.redpennon.dev/cli/usages
@@ -34,6 +35,6 @@ export function writeScaffold(cwd: string, force = false): ScaffoldResult {
     return { path, created: false };
   }
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, CONFIG_SCAFFOLD);
+  writeFileNoFollow(path, CONFIG_SCAFFOLD, cwd);
   return { path, created: true };
 }

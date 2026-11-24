@@ -1,4 +1,3 @@
-import { writeFileSync } from 'node:fs';
 
 import { Command, Flags } from '@oclif/core';
 
@@ -8,6 +7,7 @@ import { loadConfig } from '../config.js';
 import { applyFlagOverrides } from '../flag-config.js';
 import { connectionFlags } from '../shared-flags.js';
 import { formatRegex, runUsages, type UsagesFormat } from '../usages-run.js';
+import { writeFileNoFollow } from '../safe-write.js';
 
 export default class Usages extends Command {
   static override description =
@@ -96,7 +96,7 @@ export default class Usages extends Command {
     });
 
     if (flags.output) {
-      writeFileSync(flags.output, `${output}\n`);
+      writeFileNoFollow(flags.output, `${output}\n`);
       this.log(`Wrote ${flags.output}`);
     } else {
       this.log(output);
