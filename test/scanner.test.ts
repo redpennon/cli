@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -92,3 +92,35 @@ describe('scanRepository safety limits', () => {
   });
 });
 
+
+
+describe('symlinks (SAST #29)', () => {
+  it('does not read through a symlinked directory named by a literal include path', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'rp-outside-'));
+    writeFileSync(join(outside, 'secret.ts'), "client.variable('leaked-key');");
+    const cwd = repoWith({ 'src/ok.ts': "client.variable('fine');" });
+    symlinkSync(outside, join(cwd, 'p'));
+
+    const refs = await scanRepository({
+      cwd,
+      config: mergeConfig(DEFAULT_CONFIG, { includeFiles: ['p/secret.ts', 'src/ok.ts'] }),
+    });
+    expect(distinctKeys(refs)).toEqual(['fine']);
+  });
+
+  it('does not read through a symlinked directory pointing inside the repo to .git', async () => {
+    const cwd = repoWith({ '.git/config': "client.variable('git-secret');", 'src/ok.ts': "client.variable('fine');" });
+    symlinkSync(join(cwd, '.git'), join(cwd, 'g'));
+    const refs = await scanRepository({
+      cwd,
+      config: mergeConfig(DEFAULT_CONFIG, { includeFiles: ['g/config', 'src/ok.ts'] }),
+    });
+    expect(distinctKeys(refs)).toEqual(['fine']);
+  });
+
+  it('still scans regular files', async () => {
+    const cwd = repoWith({ 'src/ok.ts': "client.variable('fine');" });
+    const refs = await scanRepository({ cwd, config: DEFAULT_CONFIG });
+    expect(distinctKeys(refs)).toEqual(['fine']);
+  });
+});

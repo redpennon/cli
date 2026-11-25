@@ -236,3 +236,57 @@ describe('key on the next line (built-in single-call patterns)', () => {
     expect(keys(scanText(text, 'a.ts', patterns))).toEqual(['a-one', 'a-two']);
   });
 });
+
+describe('snippet redaction cost (SAST #31)', () => {
+  it.each([
+    ['token'.repeat(20_000)],
+    ['password'.repeat(4_000)],
+    ['a'.repeat(80_000)],
+  ])('finishes quickly on a pathological line after the match', (tail) => {
+    const text = `client.variable('k'); ${tail}\n`;
+    const start = Date.now();
+    const refs = scanText(text, 'evil.js', patterns);
+    expect(Date.now() - start).toBeLessThan(500);
+    expect(refs.map((r) => r.key)).toEqual(['k']);
+  });
+
+  it('also copes with a long line before the match', () => {
+    const text = `${'token'.repeat(20_000)} client.variable('k');\n`;
+    const start = Date.now();
+    scanText(text, 'evil.js', patterns);
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+});
+
+describe('snippet redaction coverage (SAST #33)', () => {
+  const secrets = [
+    'sk_live_51HxYzSECRETSECRET',
+    'rk_test_51HxYzSECRETSECRET',
+    'ghp_abcdefghijklmnopqrstuvwxyz0123456789',
+    'github_pat_11ABCDEFG0abcdefghijklmnop_abcdefghijklmnopqrstuvwxyz',
+    'xoxb-1234567890-abcdefghijkl',
+    'AIzaSyA1234567890abcdefghijklmnopqrstuvw',
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghij',
+    'postgres://admin:hunter2@db.internal:5432/app',
+  ];
+
+  it.each(secrets)('redacts %s from the stored snippet', (secret) => {
+    const text = `const s = "${secret}"; const v = client.variableValue('checkout-v2', false);\n`;
+    const [ref] = scanText(text, 'a.ts', patterns);
+    expect(ref.key).toBe('checkout-v2');
+    expect(ref.snippet).not.toContain(secret);
+    expect(ref.snippet).toContain("client.variableValue('checkout-v2'");
+  });
+
+  it('redacts a secret that follows the matched call', () => {
+    const text = `client.variable('k'); const s = "sk_live_51HxYzSECRETSECRET";\n`;
+    const [ref] = scanText(text, 'a.ts', patterns);
+    expect(ref.snippet).not.toContain('sk_live_51HxYzSECRETSECRET');
+  });
+
+  it('redacts a private key header line', () => {
+    const text = `-----BEGIN RSA PRIVATE KEY----- client.variable('k')\n`;
+    const [ref] = scanText(text, 'a.ts', patterns);
+    expect(ref.snippet).not.toContain('PRIVATE KEY');
+  });
+});

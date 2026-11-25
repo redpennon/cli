@@ -13767,15 +13767,15 @@ var require_pattern = __commonJS({
     exports2.removeDuplicateSlashes = removeDuplicateSlashes;
     function partitionAbsoluteAndRelative(patterns) {
       const absolute = [];
-      const relative2 = [];
+      const relative3 = [];
       for (const pattern of patterns) {
         if (isAbsolute2(pattern)) {
           absolute.push(pattern);
         } else {
-          relative2.push(pattern);
+          relative3.push(pattern);
         }
       }
-      return [absolute, relative2];
+      return [absolute, relative3];
     }
     exports2.partitionAbsoluteAndRelative = partitionAbsoluteAndRelative;
     function isAbsolute2(pattern) {
@@ -16196,6 +16196,68 @@ function buildPatterns(config) {
   }
   return patterns;
 }
+function hasNestedQuantifier(raw) {
+  const stack = [];
+  let i = 0;
+  const quantifierAt = (at) => {
+    const ch = raw[at];
+    if (ch === "*" || ch === "+") return [true, 1 + (raw[at + 1] === "?" ? 1 : 0)];
+    if (ch === "?") return [false, 1 + (raw[at + 1] === "?" ? 1 : 0)];
+    if (ch === "{") {
+      const m = /^\{(\d+)(?:(,)(\d*))?\}/.exec(raw.slice(at));
+      if (m) {
+        const max = m[2] ? m[3] === "" ? Infinity : Number(m[3]) : Number(m[1]);
+        return [max > 1, m[0].length + (raw[at + m[0].length] === "?" ? 1 : 0)];
+      }
+    }
+    return [false, 0];
+  };
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === "[") {
+      i++;
+      while (i < raw.length && raw[i] !== "]") i += raw[i] === "\\" ? 2 : 1;
+      i++;
+      const [multi2, len2] = quantifierAt(i);
+      if (multi2 && stack.length) stack[stack.length - 1].repeats = true;
+      i += len2;
+      continue;
+    }
+    if (ch === "(") {
+      stack.push({ repeats: false });
+      i++;
+      continue;
+    }
+    if (ch === "|") {
+      if (stack.length) stack[stack.length - 1].repeats = true;
+      i++;
+      continue;
+    }
+    if (ch === ")") {
+      const frame = stack.pop();
+      i++;
+      const [multi2, len2] = quantifierAt(i);
+      if (multi2 && frame?.repeats) return true;
+      if (stack.length && (multi2 || frame?.repeats)) stack[stack.length - 1].repeats = true;
+      i += len2;
+      continue;
+    }
+    const [multi, len] = quantifierAt(i);
+    if (len > 0) {
+      if (multi && stack.length) stack[stack.length - 1].repeats = true;
+      i += len;
+      continue;
+    }
+    const [atomMulti, atomLen] = quantifierAt(i + 1);
+    if (atomMulti && stack.length) stack[stack.length - 1].repeats = true;
+    i += 1 + atomLen;
+  }
+  return false;
+}
 var MAX_PATTERN_LENGTH = 500;
 var MAX_MATCH_PATTERNS = 50;
 function validateMatchPatterns(patterns) {
@@ -16224,6 +16286,11 @@ function validateMatchPatterns(patterns) {
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         throw new Error(`Invalid matchPattern for "${ext}": "${raw}" does not compile (${reason}).`);
+      }
+      if (hasNestedQuantifier(raw)) {
+        throw new Error(
+          `Invalid matchPattern for "${ext}": "${raw}" repeats a group that already repeats or branches (for example "(a+)+"), which can backtrack catastrophically. Rewrite it without nested quantifiers.`
+        );
       }
       if (groups !== 1) {
         throw new Error(
@@ -16284,6 +16351,9 @@ function mergeConfig(base, override) {
 function loadConfig(repoRoot, configPath) {
   const path = configPath ? (0, import_node_path.resolve)(repoRoot, configPath) : (0, import_node_path.join)(repoRoot, CONFIG_RELATIVE_PATH);
   if (!(0, import_node_fs.existsSync)(path)) return { ...DEFAULT_CONFIG };
+  if ((0, import_node_fs.lstatSync)(path).isSymbolicLink() || (0, import_node_fs.realpathSync)(path) !== (0, import_node_path.join)((0, import_node_fs.realpathSync)(repoRoot), (0, import_node_path.relative)(repoRoot, path))) {
+    throw new Error(`Config file "${path}" is, or sits behind, a symlink; refusing to read it.`);
+  }
   const raw = (0, import_yaml.parse)((0, import_node_fs.readFileSync)(path, "utf8")) ?? {};
   const block = raw.codeInsights ?? raw;
   return mergeConfig(DEFAULT_CONFIG, block);
@@ -16514,14 +16584,29 @@ function lineNumberAt(starts, index) {
 }
 var MAX_SNIPPET_LENGTH = 200;
 var REDACTED = "[REDACTED]";
+var REDACTION_WINDOW = 400;
 var SECRET_PATTERNS = [
-  [/\brpa_[A-Za-z0-9_-]{8,}/g, REDACTED],
+  [/\brpa_[A-Za-z0-9_-]{8,256}/g, REDACTED],
   [/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, REDACTED],
-  [/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, `Bearer ${REDACTED}`],
+  [/\bBearer\s{1,8}[A-Za-z0-9._~+/=-]{8,512}/gi, `Bearer ${REDACTED}`],
   [
-    /([\w.-]*(?:password|passwd|secret|token|api[_-]?key)[\w.-]*\s*[:=]\s*)(['"]?)[^\s'",;)]+\2/gi,
+    /([\w.-]{0,64}(?:password|passwd|secret|token|api[_-]?key)[\w.-]{0,64}\s{0,8}[:=]\s{0,8})(['"]?)[^\s'",;)]{1,512}\2/gi,
     `$1${REDACTED}`
-  ]
+  ],
+  // Payment, source-host, chat and cloud credentials with a recognisable prefix.
+  [/\b[sr]k_(?:live|test)_[A-Za-z0-9]{8,256}/g, REDACTED],
+  [/\b(?:pk|whsec)_(?:live_)?[A-Za-z0-9]{16,256}/g, REDACTED],
+  [/\bgh[pousr]_[A-Za-z0-9]{20,256}/g, REDACTED],
+  [/\bgithub_pat_[A-Za-z0-9_]{20,256}/g, REDACTED],
+  [/\bglpat-[A-Za-z0-9_-]{16,256}/g, REDACTED],
+  [/\bxox[abprs]-[A-Za-z0-9-]{10,256}/g, REDACTED],
+  [/\bAIza[0-9A-Za-z_-]{35}/g, REDACTED],
+  // JWTs: three base64url segments, the first two starting "eyJ".
+  [/\beyJ[A-Za-z0-9_-]{4,512}\.eyJ[A-Za-z0-9_-]{4,512}\.[A-Za-z0-9_-]{0,512}/g, REDACTED],
+  // Credentials embedded in a URL: scheme://user:password@host
+  [/(\b[a-z][a-z0-9+.-]{1,16}:\/\/)[^\s/@:'"]{1,128}:[^\s/@'"]{1,128}@/gi, `$1${REDACTED}@`],
+  // PEM private key armour.
+  [/-----BEGIN [A-Z ]{0,32}PRIVATE KEY-----/g, REDACTED]
 ];
 function redactSecrets(text) {
   return SECRET_PATTERNS.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text);
@@ -16530,12 +16615,13 @@ function snippetAt(text, index, matchText) {
   const start = text.lastIndexOf("\n", index - 1) + 1;
   let end = text.indexOf("\n", index);
   if (end === -1) end = text.length;
-  const line = text.slice(start, end);
   const col = index - start;
-  const matchLen = Math.min(matchText.split("\n")[0].length, line.length - col);
-  const pre = redactSecrets(line.slice(0, col));
-  const mid = line.slice(col, col + matchLen);
-  const post = redactSecrets(line.slice(col + matchLen));
+  const matchLen = Math.min(matchText.split("\n")[0].length, end - start - col);
+  const preFrom = Math.max(start, index - REDACTION_WINDOW);
+  const postTo = Math.min(end, index + matchLen + REDACTION_WINDOW);
+  const pre = redactSecrets(text.slice(preFrom, index));
+  const mid = text.slice(index, index + matchLen);
+  const post = redactSecrets(text.slice(index + matchLen, postTo));
   const full = pre + mid + post;
   if (full.length <= MAX_SNIPPET_LENGTH) return full.trim();
   const from = Math.max(0, Math.min(pre.length - 40, full.length - MAX_SNIPPET_LENGTH));
@@ -16605,10 +16691,12 @@ async function scanRepository(opts) {
   });
   const patterns = buildPatterns(opts.config);
   const refs = [];
+  const realCwd = (0, import_node_fs2.realpathSync)(opts.cwd);
   for (const rel of files.sort()) {
     let text;
     try {
       const full = (0, import_node_path2.join)(opts.cwd, rel);
+      if ((0, import_node_fs2.realpathSync)(full) !== (0, import_node_path2.join)(realCwd, rel)) continue;
       if ((0, import_node_fs2.statSync)(full).size > maxBytes) continue;
       text = (0, import_node_fs2.readFileSync)(full, "utf8");
     } catch {
@@ -16632,6 +16720,10 @@ function resolveWorkingDirectory(base, input) {
   }
   if (!(0, import_node_fs3.existsSync)(dir) || !(0, import_node_fs3.statSync)(dir).isDirectory()) {
     throw new Error(`working-directory "${input}" does not exist or is not a directory.`);
+  }
+  const realRel = (0, import_node_path3.relative)((0, import_node_fs3.realpathSync)(base), (0, import_node_fs3.realpathSync)(dir));
+  if (realRel.startsWith("..") || (0, import_node_path3.resolve)((0, import_node_fs3.realpathSync)(base), realRel) !== (0, import_node_fs3.realpathSync)(dir)) {
+    throw new Error(`working-directory "${input}" is outside the workspace.`);
   }
   return dir;
 }

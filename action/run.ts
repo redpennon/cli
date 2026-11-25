@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 import { resolveApiUrl } from '../src/auth.js';
@@ -27,6 +27,12 @@ function resolveWorkingDirectory(base: string, input: string | undefined): strin
   }
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new Error(`working-directory "${input}" does not exist or is not a directory.`);
+  }
+  // The check above is lexical; a symlinked directory could still lead out
+  // of the workspace (SAST #29).
+  const realRel = relative(realpathSync(base), realpathSync(dir));
+  if (realRel.startsWith('..') || resolve(realpathSync(base), realRel) !== realpathSync(dir)) {
+    throw new Error(`working-directory "${input}" is outside the workspace.`);
   }
   return dir;
 }

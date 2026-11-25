@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
 import fg from 'fast-glob';
@@ -50,10 +50,16 @@ export async function scanRepository(opts: ScanOptions): Promise<CodeReference[]
 
   const patterns = buildPatterns(opts.config);
   const refs: CodeReference[] = [];
+  const realCwd = realpathSync(opts.cwd);
   for (const rel of files.sort()) {
     let text: string;
     try {
       const full = join(opts.cwd, rel);
+      // The glob library only `lstat`s a literal include path, so an
+      // intermediate symlink (`p -> /proc/self`, `g -> .git`) is followed by
+      // the kernel. Read a file only if its resolved path is the one the
+      // glob named, i.e. no path component is a symlink (SAST #29).
+      if (realpathSync(full) !== join(realCwd, rel)) continue;
       if (statSync(full).size > maxBytes) continue;
       text = readFileSync(full, 'utf8');
     } catch {
